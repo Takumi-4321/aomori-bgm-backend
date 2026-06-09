@@ -1,6 +1,9 @@
-# aomori-bgm-backend/main.py
+from fastapi import FastAPI
 
-bgm_title = "ねぶたの夜 -津軽三味線モダンMIX-"
-target_city = "青森市"
+# FastAPIのインスタンス（本体）を作成
+app = FastAPI()
 
-print(f"【配信開始】{target_city}向けBGM: {bgm_title}")
+# ルートURL（ / ）にGETリクエストが来たら、以下の関数を実行する
+@app.get("/")
+def read_root():
+    return {"message": "Hello World from Aomori BGM!"}
