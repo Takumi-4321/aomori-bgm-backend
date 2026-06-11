@@ -1,86 +1,52 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
+from sqlalchemy.orm import Session
+
+# 自分で作ったファイルから設定を読み込む
+import models
+from database import engine, get_db
+
+# アプリ起動時に、上で定義したテーブルを実際のSQLiteに自動作成する
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Aomori BGM API",
-    description="青森の情景を音で届けるバックエンドサービス",
-    version="1.0.0"
+    description="SQLiteデータベースと連携した、本物の青森BGM API",
+    version="1.1.0"
 )
 
-# ==========================================
-# 1. スキーマ（データ構造）の定義
-# ==========================================
+# Pydanticモデル（データの出口の形）
 class BGMResponse(BaseModel):
     id: int
     title: str
     description: str
     location: str
     duration_seconds: int
-    category: str  # 例: "festival", "nature", "traditional"
+    category: str
 
-# ==========================================
-# 2. 模擬データ（データベースの代わり）
-# ==========================================
-MOCK_BGM_DATABASE = [
-    {
-        "id": 1,
-        "title": "青森ねぶた祭り - 運行の熱気",
-        "description": "じゃわめぐ（ぞくぞくする）大迫力の囃子と跳人の声。",
-        "location": "青森市",
-        "duration_seconds": 180,
-        "category": "festival"
-    },
-    {
-        "id": 2,
-        "title": "奥入瀬渓流 - 清流のせせらぎ",
-        "description": "新緑の奥入瀬、阿修羅の流れ周辺で録音した天然のホワイトノイズ。",
-        "location": "十和田市",
-        "duration_seconds": 300,
-        "category": "nature"
-    },
-    {
-        "id": 3,
-        "title": "津軽三味線 - 即興の響き",
-        "description": "叩き奏法による、力強くも哀愁を帯びた伝統の音色。",
-        "location": "弘前市",
-        "duration_seconds": 240,
-        "category": "traditional"
-    }
-]
-
-# ==========================================
-# 3. エンドポイント（APIのURL）の実装
-# ==========================================
-
-# ① BGM一覧取得API
-@app.get(
-    "/bgms", 
-    response_model=List[BGMResponse], 
-    status_code=status.HTTP_200_OK,
-    summary="BGM一覧の取得",
-    description="登録されているすべての青森のBGMデータを返します。"
-)
-def get_all_bgms():
-    return MOCK_BGM_DATABASE
+    class Config:
+        # SQLAlchemyのオブジェクト（辞書型じゃないデータ）も自動でPydanticに変換する魔法の設定
+        orm_mode = True
 
 
-# ② BGM詳細取得API
-@app.get(
-    "/bgms/{bgm_id}", 
-    response_model=BGMResponse, 
-    status_code=status.HTTP_200_OK,
-    summary="BGM詳細の取得",
-    description="指定されたIDのBGM詳細データを返します。存在しない場合は404を返します。"
-)
-def get_bgm_by_id(bgm_id: int):
-    # データベース（リスト）から該当するIDを探索
-    for bgm in MOCK_BGM_DATABASE:
-        if bgm["id"] == bgm_id:
-            return bgm
+# ① 【DB版】BGM一覧取得API
+@app.get("/bgms", response_model=List[BGMResponse], status_code=status.HTTP_200_OK)
+def get_all_bgms(db: Session = Depends(get_db)):
+    # データベースからbgmsテーブルのデータを全件取得する（SQLが自動発行される）
+    bgms = db.query(models.BGMModel).all()
+    return bgms
+
+
+# ② 【DB版】BGM詳細取得API
+@app.get("/bgms/{bgm_id}", response_model=BGMResponse, status_code=status.HTTP_200_OK)
+def get_bgm_by_id(bgm_id: int, db: Session = Depends(get_db)):
+    # データベースから指定されたIDのデータを1件だけ探索
+    bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
     
-    # 見つからなかった場合は、適切なHTTPステータスコード（404）を返却
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND, 
-        detail=f"BGM ID {bgm_id} は見つかりませんでした。"
-    )
+    if bgm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"BGM ID {bgm_id} はデータベースに存在しません。"
+        )
+    return bgm
