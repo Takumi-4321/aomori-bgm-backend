@@ -89,3 +89,54 @@ def get_bgm_by_id(bgm_id: int, db: Session = Depends(get_db)):
             detail=f"BGM ID {bgm_id} はデータベースに存在しません。"
         )
     return bgm
+
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+# ※既存の models, schemas, database のインポート文はそのまま残してください
+
+app = FastAPI()
+
+# --- 既存のPOSTやGETの処理がここにある想定です ---
+
+@app.put("/bgm/{bgm_id}", response_model=schemas.BGM)
+def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
+    
+    # 【コメント入れ所①：指定されたIDのデータがDBに存在するか探す処理】
+    db_bgm = db.query(models.BGM).filter(models.BGM.id == bgm_id).first()
+    
+    # 【コメント入れ所②：データが見つからなかった場合にエラー(404)を返す処理】
+    if db_bgm is None:
+        raise HTTPException(status_code=404, detail="BGM not found")
+    
+    # 【コメント入れ所③：既存のデータ（db_bgm）の各カラムを、受け取った新しいデータ（updated_bgm）で上書きする処理】
+    db_bgm.title = updated_bgm.title
+    db_bgm.description = updated_bgm.description
+    # ※他にも音声ファイルのパスなどがあれば、ここに同様の上書き処理を追加します
+    
+    # 【コメント入れ所④：DBの変更内容を確定（コミット）させる処理】
+    db.commit()
+    
+    # 【コメント入れ所⑤：確定した最新のデータをDBから再読み込みする処理】
+    db.refresh(db_bgm)
+    
+    # 更新したデータをクライアントに返却
+    return db_bgm
+
+@app.delete("/bgm/{bgm_id}")
+def delete_bgm(bgm_id: int, db: Session = Depends(get_db)):
+    
+    # 【コメント入れ所①：削除したいIDのデータが、本当にDBにあるか確認する処理】
+    db_bgm = db.query(models.BGM).filter(models.BGM.id == bgm_id).first()
+    
+    # 【コメント入れ所②：データが存在しなかったら、更新時と同様に404エラーを出す処理】
+    if db_bgm is None:
+        raise HTTPException(status_code=404, detail="BGM not found")
+    
+    # 【コメント入れ所③：見つかったデータを、データベースのゴミ箱（削除対象）に入れる処理】
+    db.delete(db_bgm)
+    
+    # 【コメント入れ所④：削除を確定させ、データベースから完全に消去する処理】
+    db.commit()
+    
+    # 正常に消去されたことを示すメッセージを返却
+    return {"message": f"BGM with id {bgm_id} has been deleted successfully."}
