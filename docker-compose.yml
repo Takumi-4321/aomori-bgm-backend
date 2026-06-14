@@ -2,16 +2,13 @@ version: "3.8"
 
 services:
   web:
-    # カレントディレクトリのDockerfileを元にビルド
     build: .
-    # コンテナ名を設定
     container_name: aomori_bgm_backend
-    # ローカルのポート8000番を、コンテナの8000番にマッピング
     ports:
       - "8000:8000"
-    # ローカルのコード変更をリアルタイムでコンテナ内に反映（ホットリロード用）
     volumes:
       - .:/app
-    # 環境変数の指定（必要に応じて追加可能）
+    # 【実務仕様】環境変数の指定（開発環境であることを明示）
     environment:
       - ENV=development
+      - DATABASE_URL=sqlite:///./aomori_bgm.db
