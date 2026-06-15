@@ -1,26 +1,25 @@
-from sqlalchemy import create_engine
+import os
+from sqlalchemy import create_index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
-# 1. データベースの保存先を指定（同じフォルダ内に「aomori_bgm.db」というファイルができる）
-SQLALCHEMY_DATABASE_URL = "sqlite:///./aomori_bgm.db"
+# 環境変数からPostgreSQLの接続URLを取得。なければデフォルト値（Docker環境用）を使用
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://db_user:db_password@localhost:5432/aomori_bgm_db")
 
-# 2. データベースを操作する「エンジン」を作成
-engine = create_engine(
-    # SQLite限定の設定：複数のスレッドからアクセスできるようにする
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+# PostgreSQL用のEngineを作成（SQLiteの時の 'check_same_thread' は不要になるため削除）
+engine = create_engine(DATABASE_URL)
 
-# 3. データベースとやり取りをする「セッション（窓口）」の工場を作成
+# 各APIリクエストごとにデータベースのセッション（接続インスタンス）を作るための設定
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 4. 後でテーブルの形（モデル）を作る時に使うベースクラス
+# テーブルのモデルを作るためのベースクラス
 Base = declarative_base()
 
-# 5. APIが実行される時に、DB接続を開いて、終わったら自動で閉じるための便利な仕組み
+# APIがデータベースを利用する際に呼び出す関数（依存性注入用）
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        db.close() # 処理が終わったら必ず接続を閉じてメモリを解放する（実務で超重要）

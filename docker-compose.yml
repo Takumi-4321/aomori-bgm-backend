@@ -1,14 +1,31 @@
 version: "3.8"
 
 services:
+  # ① バックエンド（FastAPI）のコンテナ
   web:
     build: .
-    container_name: aomori_bgm_backend
     ports:
       - "8000:8000"
     volumes:
       - .:/app
-    # 【実務仕様】環境変数の指定（開発環境であることを明示）
     environment:
-      - ENV=development
-      - DATABASE_URL=sqlite:///./aomori_bgm.db
+      # SQLiteからPostgreSQLの接続URLに変更（環境変数として定義）
+      - DATABASE_URL=postgresql://db_user:db_password@db:5432/aomori_bgm_db
+    depends_on:
+      - db # dbコンテナが起動した後にwebコンテナを起動する設定
+
+  # ② データベース（PostgreSQL）のコンテナ ★新設！
+  db:
+    image: postgres:15-alpine # 軽量なalpine版のPostgreSQL15を採用
+    container_name: aomori_postgres_db
+    environment:
+      - POSTGRES_USER=db_user # データベースの接続ユーザー名
+      - POSTGRES_PASSWORD=db_password # 接続パスワード（実務ではSecretsで隠す領域）
+      - POSTGRES_DB=aomori_bgm_db # 作成するデータベース名
+    ports:
+      - "5432:5432" # PostgreSQLの標準ポートを開放
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # コンテナを消してもデータが消えないようにPC側に保存
+
+volumes:
+  postgres_data: # データ保存用の永続ボリュームを定義
