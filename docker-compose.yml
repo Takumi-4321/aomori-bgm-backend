@@ -1,31 +1,31 @@
-version: "3.8"
-
 services:
-  # ① バックエンド（FastAPI）のコンテナ
+  # ① データベース（PostgreSQL）のコンテナ
+  db:
+    image: postgres:15-alpine
+    container_name: aomori_postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: db_user
+      POSTGRES_PASSWORD: db_password
+      POSTGRES_DB: aomori_bgm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ② バックエンド（FastAPI）のコンテナ
   web:
     build: .
-    ports:
-      - "8000:8000"
+    container_name: aomori-bgm-backend-web-1
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - .:/app
-    environment:
-      # SQLiteからPostgreSQLの接続URLに変更（環境変数として定義）
-      - DATABASE_URL=postgresql://db_user:db_password@db:5432/aomori_bgm_db
-    depends_on:
-      - db # dbコンテナが起動した後にwebコンテナを起動する設定
-
-  # ② データベース（PostgreSQL）のコンテナ ★新設！
-  db:
-    image: postgres:15-alpine # 軽量なalpine版のPostgreSQL15を採用
-    container_name: aomori_postgres_db
-    environment:
-      - POSTGRES_USER=db_user # データベースの接続ユーザー名
-      - POSTGRES_PASSWORD=db_password # 接続パスワード（実務ではSecretsで隠す領域）
-      - POSTGRES_DB=aomori_bgm_db # 作成するデータベース名
     ports:
-      - "5432:5432" # PostgreSQLの標準ポートを開放
-    volumes:
-      - postgres_data:/var/lib/postgresql/data # コンテナを消してもデータが消えないようにPC側に保存
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://db_user:db_password@db:5432/aomori_bgm_db
 
 volumes:
-  postgres_data: # データ保存用の永続ボリュームを定義
+  postgres_data:
