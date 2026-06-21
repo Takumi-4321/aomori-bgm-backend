@@ -1,38 +1,72 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
 import models
 import schemas
-from database import get_db # さっき完璧に入っているのを確認した関数です！
+import security # 👈 暗号化ファイル
+from database import engine, get_db
+
+# データベースのテーブルを自動作成
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Aomori BGM API")
 
-# 📥 ① BGMデータを新しく登録するAPI (POST method)
-@app.post("/bgms", response_model=schemas.BGMResponse)
+
+# ==========================================
+# 👤 ① ユーザー認証関連のAPI（新設！）
+# ==========================================
+
+@app.post("/users", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # 1. すでに同じメールアドレスが登録されていないかチェック
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(
+            status_code=400,
+            detail="このメールアドレスは既に登録されています。"
+        )
+    
+    # 2. パスワードをハッシュ化（暗号化）
+    hashed_pass = security.get_password_hash(user.password)
+    
+    # 3. データベースに保存
+    new_user = models.User(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_pass
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+# ==========================================
+# 🎵 ② BGM関連のAPI（あなたのコードをベースに強化！）
+# ==========================================
+
+# 📥 BGM登録（仮のowner_id=1をセットするように強化）
+@app.post("/bgms", response_model=schemas.BGMResponse, status_code=status.HTTP_201_CREATED)
 def create_bgm(bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
-    # models.py の形に変換してDBに突っ込む準備
-    db_bgm = models.BGMModel(**bgm.model_dump())
-    db.add(db_bgm)      # データを追加
-    db.commit()         # 変更を確定
-    db.refresh(db_bgm)  # DB側の最新状態（自動生成されたIDなど）を反映
+    db_bgm = models.BGMModel(**bgm.model_dump(), owner_id=1) # 👈 ここだけログイン対応に変更
+    db.add(db_bgm)
+    db.commit()
+    db.refresh(db_bgm)
     return db_bgm
 
-# 📤 ② 登録されたBGMデータの一覧を全件取得するAPI (GET method)
+# 📤 BGM全件取得（そのままキープ！）
 @app.get("/bgms", response_model=List[schemas.BGMResponse])
 def read_bgms(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    bgms = db.query(models.BGMModel).offset(skip).limit(limit).all()
-    return bgms
+    return db.query(models.BGMModel).offset(skip).limit(limit).all()
 
-# 🔄 ③ 特定のBGMデータを更新するAPI (PUT method)
+# 🔄 BGM更新（そのままキープ！）
 @app.put("/bgms/{bgm_id}", response_model=schemas.BGMResponse)
 def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
-    # 指定されたIDのデータがDBにあるか探す
     db_bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
     if db_bgm is None:
         raise HTTPException(status_code=404, detail="指定されたBGMが見つかりません")
     
-    # データを上書き
     for key, value in updated_bgm.model_dump().items():
         setattr(db_bgm, key, value)
         
@@ -40,14 +74,13 @@ def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depend
     db.refresh(db_bgm)
     return db_bgm
 
-# 🗑️ ④ 特定のBGMデータを削除するAPI (DELETE method)
+# 🗑️ BGM削除（そのままキープ！）
 @app.delete("/bgms/{bgm_id}")
 def delete_bgm(bgm_id: int, db: Session = Depends(get_db)):
-    # 指定されたIDのデータがDBにあるか探す
     db_bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
     if db_bgm is None:
         raise HTTPException(status_code=404, detail="指定されたBGMが見つかりません")
     
-    db.delete(db_bgm) # 削除を実行
-    db.commit()       # 確定
+    db.delete(db_bgm)
+    db.commit()
     return {"message": f"ID {bgm_id} のBGMを削除しました"}
