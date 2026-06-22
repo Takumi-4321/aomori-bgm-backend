@@ -49,7 +49,8 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 # 📥 BGM登録（仮のowner_id=1をセットするように強化）
 @app.post("/bgms", response_model=schemas.BGMResponse, status_code=status.HTTP_201_CREATED)
 def create_bgm(bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
-    db_bgm = models.BGMModel(**bgm.model_dump(), owner_id=1) # 👈 ここだけログイン対応に変更
+    # mode="json" を追加するだけで、URL型が安全な文字列に変換されます！
+    db_bgm = models.BGMModel(**bgm.model_dump(mode="json"), owner_id=1)
     db.add(db_bgm)
     db.commit()
     db.refresh(db_bgm)
