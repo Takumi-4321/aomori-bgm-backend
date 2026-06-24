@@ -68,9 +68,10 @@ def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depend
     if db_bgm is None:
         raise HTTPException(status_code=404, detail="指定されたBGMが見つかりません")
     
-    for key, value in updated_bgm.model_dump().items():
+    # mode="json" を追加することで、URLをPostgreSQLが喜ぶ普通の文字列に変換して上書きします！
+    for key, value in updated_bgm.model_dump(mode="json").items():
         setattr(db_bgm, key, value)
-        
+       
     db.commit()
     db.refresh(db_bgm)
     return db_bgm
