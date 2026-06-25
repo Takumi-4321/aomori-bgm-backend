@@ -7,9 +7,6 @@ import schemas
 import security # 👈 暗号化ファイル
 from database import engine, get_db
 
-# データベースのテーブルを自動作成
-models.Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="Aomori BGM API")
 
 
