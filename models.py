@@ -1,25 +1,25 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from database import Base # 👈 あなたの環境に合わせて .database から database に修正しました！
+from database import Base
 
-# 👤 ① ユーザー情報のテーブル（新しく追加！）
+# 👤 ① ユーザー情報のテーブル
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False) # メール重複はNG
-    hashed_password = Column(String, nullable=False) # パスワードは暗号化して保存
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # 🔗 BGMテーブルとの繋がり（1人のユーザーは複数のBGMを持てる）
+    # 🔗 BGMテーブルとの繋がり
     bgms = relationship("BGMModel", back_populates="owner")
 
 
-# 🎵 ② BGM情報のテーブル（ログイン機能と合体させてパワーアップ！）
-class BGMModel(Base): # 👈 あなたのクラス名「BGMModel」に合わせました！
+# 🎵 ② BGM情報のテーブル
+class BGMModel(Base):
     __tablename__ = "bgms"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -32,7 +32,17 @@ class BGMModel(Base): # 👈 あなたのクラス名「BGMModel」に合わせ�
     category = Column(String, nullable=True)           
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # 🔗 👈【超重要】誰が投稿したBGMなのかを紐付けるための鍵（外部キー）
+    # 🔗 誰が投稿したBGMなのかを紐付けるための鍵（外部キー）
     owner_id = Column(Integer, ForeignKey("users.id"))
-    # 🔗 ユーザーテーブルとの繋がり（このBGMは特定のユーザーのもの）
+    # 🔗 ユーザーテーブルとの繋がり
     owner = relationship("User", back_populates="bgms")
+
+
+# 📜 ③ BGMの操作履歴を記録するテーブル（トランザクション検証用！）
+class BGMLogModel(Base):
+    __tablename__ = "bgm_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bgm_id = Column(Integer, nullable=True)               # 操作されたBGMのID
+    action = Column(String, nullable=False)                # "CREATE", "UPDATE", "DELETE"
+    created_at = Column(DateTime, default=datetime.utcnow) # 操作された日時

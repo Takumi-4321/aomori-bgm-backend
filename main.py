@@ -43,13 +43,37 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 # 🎵 ② BGM関連のAPI（あなたのコードをベースに強化！）
 # ==========================================
 
-# 📥 BGM登録（仮のowner_id=1をセットするように強化）
+# 📥 BGM登録（ACID特性・トランザクション設計版！）
 @app.post("/bgms", response_model=schemas.BGMResponse, status_code=status.HTTP_201_CREATED)
 def create_bgm(bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
-    # mode="json" を追加するだけで、URL型が安全な文字列に変換されます！
-    db_bgm = models.BGMModel(**bgm.model_dump(mode="json"), owner_id=1)
-    db.add(db_bgm)
-    db.commit()
+    
+    # 💡 ここから厳密なトランザクションを開始（一蓮托生のスタート）
+    with db.begin():
+        try:
+            # 1. BGMデータを生成して仮追加（ステージング）
+            db_bgm = models.BGMModel(**bgm.model_dump(mode="json"), owner_id=1)
+            db.add(db_bgm)
+            
+            # 💡 一度データベースに仮反映して、自動生成される「BGMのID」を取得
+            db.flush() 
+
+            # 2. 同時に「ログテーブル」にも操作履歴を生成して仮追加
+            db_log = models.BGMLogModel(
+                bgm_id=db_bgm.id,
+                action="CREATE"
+            )
+            db.add(db_log)
+            
+            # 💡 withブロックを正常に抜ければ、自動で一括コミットされ両方同時に確定します！
+            
+        except Exception as e:
+            # 💡 どちらか片方でもエラーが起きたら自動でロールバックされ、すべて白紙に戻します！
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"データベースエラーにより処理を巻き戻しました: {str(e)}"
+            )
+
+    # 確定したデータをリフレッシュしてクライアントに返却
     db.refresh(db_bgm)
     return db_bgm
 
