@@ -107,3 +107,32 @@ def delete_bgm(bgm_id: int, db: Session = Depends(get_db)):
     db.delete(db_bgm)
     db.commit()
     return {"message": f"ID {bgm_id} のBGMを削除しました"}
+
+from fastapi.security import OAuth2PasswordRequestForm
+from security import create_access_token
+
+# ==========================================
+# 🎫 ③ ログイン認証関連のAPI（今から草を生やす場所！）
+# ==========================================
+
+@app.post("/token")
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    # 1. データベースからユーザーをメールアドレスで探す
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    
+    # 2. ユーザーが存在しない、またはパスワードが間違っていたらエラー
+    if not user or not security.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="メールアドレスかパスワードが間違っています",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 3. 検証OKなら、本物の会員証（JWTアクセストークン）を発行！
+    access_token = create_access_token(data={"sub": user.email})
+    
+    # 4. フロントエンド（ブラウザ）に鍵を返す
+    return {"access_token": access_token, "token_type": "bearer"}
