@@ -1,6 +1,6 @@
 import os
-import jwt
 from datetime import datetime, timedelta
+from jose import jwt  # 👈 ここを「jose」からのインポートに変える！
 from passlib.context import CryptContext
 
 # 🔒 パスバー設定（すでに書いてあるもの）
