@@ -1,17 +1,23 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer  # 👈 鍵マークを出すために追加！
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List
 
 import models
 import schemas
-import security # 👈 暗号化ファイル
+import security  # 👈 暗号化ファイル
 from database import engine, get_db
+from security import create_access_token
 
 app = FastAPI(title="Aomori BGM API")
 
+# 🔑 【新設】画面に「Authorize」ボタンと「鍵マーク」を出現させるための設定
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 
 # ==========================================
-# 👤 ① ユーザー認証関連のAPI（新設！）
+# 👤 ① ユーザー認証関連のAPI
 # ==========================================
 
 @app.post("/users", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
@@ -40,13 +46,18 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 # ==========================================
-# 🎵 ② BGM関連のAPI（あなたのコードをベースに強化！）
+# 🎵 ② BGM関連のAPI
 # ==========================================
 
 # 📥 BGM登録（ACID特性・トランザクション設計版！）
+
 @app.post("/bgms", response_model=schemas.BGMResponse, status_code=status.HTTP_201_CREATED)
-def create_bgm(bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
-    
+def create_bgm(
+    bgm: schemas.BGMCreate, 
+    db: Session = Depends(get_db), 
+    token: str = Depends(oauth2_scheme)  # 👈 カンマ「,」で区切って、この1行を追加！
+):
+
     # 💡 ここから厳密なトランザクションを開始（一蓮托生のスタート）
     with db.begin():
         try:
@@ -77,12 +88,12 @@ def create_bgm(bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
     db.refresh(db_bgm)
     return db_bgm
 
-# 📤 BGM全件取得（そのままキープ！）
+# 📤 BGM全件取得
 @app.get("/bgms", response_model=List[schemas.BGMResponse])
 def read_bgms(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.BGMModel).offset(skip).limit(limit).all()
 
-# 🔄 BGM更新（そのままキープ！）
+# 🔄 BGM更新
 @app.put("/bgms/{bgm_id}", response_model=schemas.BGMResponse)
 def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depends(get_db)):
     db_bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
@@ -97,7 +108,7 @@ def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depend
     db.refresh(db_bgm)
     return db_bgm
 
-# 🗑️ BGM削除（そのままキープ！）
+# 🗑️ BGM削除
 @app.delete("/bgms/{bgm_id}")
 def delete_bgm(bgm_id: int, db: Session = Depends(get_db)):
     db_bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
@@ -108,11 +119,9 @@ def delete_bgm(bgm_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": f"ID {bgm_id} のBGMを削除しました"}
 
-from fastapi.security import OAuth2PasswordRequestForm
-from security import create_access_token
 
 # ==========================================
-# 🎫 ③ ログイン認証関連のAPI（今から草を生やす場所！）
+# 🎫 ③ ログイン認証関連のAPI
 # ==========================================
 
 @app.post("/token")
