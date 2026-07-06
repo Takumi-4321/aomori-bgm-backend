@@ -49,20 +49,27 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 # 🎵 ② BGM関連のAPI
 # ==========================================
 
-# 📥 BGM登録（ACID特性・トランザクション設計版！）
-
+# 📥 BGM登録（ログインユーザーのIDを自動紐付けする版！）
 @app.post("/bgms", response_model=schemas.BGMResponse, status_code=status.HTTP_201_CREATED)
 def create_bgm(
     bgm: schemas.BGMCreate, 
     db: Session = Depends(get_db), 
-    token: str = Depends(oauth2_scheme)  # 👈 カンマ「,」で区切って、この1行を追加！
+    token: str = Depends(oauth2_scheme)  # 👈 鍵チェック門番
 ):
+    # 👤 【新設】トークン（会員証）から、今ログインしているユーザーを特定する
+    # ※ `create_access_token(data={"sub": user.email})` で作ったので、tokenの中にはemailが入っています
+    current_user = db.query(models.User).filter(models.User.email == token).first()
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="有効なユーザーが見つかりません。"
+        )
 
-    # 💡 ここから厳密なトランザクションを開始（一蓮托生のスタート）
+    # 💡 ここから厳密なトランザクションを開始
     with db.begin():
         try:
-            # 1. BGMデータを生成して仮追加（ステージング）
-            db_bgm = models.BGMModel(**bgm.model_dump(mode="json"), owner_id=1)
+            # 1. BGMデータを生成して仮追加（owner_idにログイン中のユーザーIDを自動セット！）
+            db_bgm = models.BGMModel(**bgm.model_dump(mode="json"), owner_id=current_user.id)
             db.add(db_bgm)
             
             # 💡 一度データベースに仮反映して、自動生成される「BGMのID」を取得
@@ -75,10 +82,7 @@ def create_bgm(
             )
             db.add(db_log)
             
-            # 💡 withブロックを正常に抜ければ、自動で一括コミットされ両方同時に確定します！
-            
         except Exception as e:
-            # 💡 どちらか片方でもエラーが起きたら自動でロールバックされ、すべて白紙に戻します！
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"データベースエラーにより処理を巻き戻しました: {str(e)}"
@@ -100,7 +104,6 @@ def update_bgm(bgm_id: int, updated_bgm: schemas.BGMCreate, db: Session = Depend
     if db_bgm is None:
         raise HTTPException(status_code=404, detail="指定されたBGMが見つかりません")
     
-    # mode="json" を追加することで、URLをPostgreSQLが喜ぶ普通の文字列に変換して上書きします！
     for key, value in updated_bgm.model_dump(mode="json").items():
         setattr(db_bgm, key, value)
        
