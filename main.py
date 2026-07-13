@@ -102,4 +102,57 @@ def update_bgm(
     bgm_id: int, 
     updated_bgm: schemas.BGMCreate, 
     db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)  # 👈 鍵
+    token: str = Depends(oauth2_scheme)  # 👈 鍵チェック門番を追加！
+):
+    db_bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
+    if db_bgm is None:
+        raise HTTPException(status_code=404, detail="指定されたBGMが見つかりません")
+    
+    for key, value in updated_bgm.model_dump(mode="json").items():
+        setattr(db_bgm, key, value)
+       
+    db.commit()
+    db.refresh(db_bgm)
+    return db_bgm
+
+# 🗑️ BGM削除（👈 鍵ロックを追加！）
+@app.delete("/bgms/{bgm_id}")
+def delete_bgm(
+    bgm_id: int, 
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme)  # 👈 鍵チェック門番を追加！
+):
+    db_bgm = db.query(models.BGMModel).filter(models.BGMModel.id == bgm_id).first()
+    if db_bgm is None:
+        raise HTTPException(status_code=404, detail="指定されたBGMが見つかりません")
+    
+    db.delete(db_bgm)
+    db.commit()
+    return {"message": f"ID {bgm_id} のBGMを削除しました"}
+
+
+# ==========================================
+# 🎫 ③ ログイン認証関連のAPI
+# ==========================================
+
+@app.post("/token")
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    # 1. データベースからユーザーをメールアドレスで探す
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    
+    # 2. ユーザーが存在しない、またはパスワードが間違っていたらエラー
+    if not user or not security.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="メールアドレスかパスワードが間違っています",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 3. 検証OKなら、本物の会員証（JWTアクセストークン）を発行！
+    access_token = create_access_token(data={"sub": user.email})
+    
+    # 4. フロントエンド（ブラウザ）に鍵を返す
+    return {"access_token": access_token, "token_type": "bearer"}
